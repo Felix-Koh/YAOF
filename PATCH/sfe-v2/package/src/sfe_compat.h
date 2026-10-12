@@ -18,6 +18,11 @@
 #include <net/rtnetlink.h>
 #include <net/dst.h>
 #include <net/route.h>
+#include <linux/netfilter.h>
+#include <linux/netfilter_ipv4.h>
+#if defined(SFE_SUPPORT_IPV6)
+#include <linux/netfilter_ipv6.h>
+#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0))
 #include <linux/unaligned.h>
