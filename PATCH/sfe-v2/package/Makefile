@@ -21,7 +21,7 @@ define KernelPackage/shortcut-fe
   CATEGORY:=Kernel modules
   SUBMENU:=Network Support
   TITLE:=Qualcomm Shortcut-FE v2 Engine
-  DEPENDS:=+kmod-nf-conntrack
+  DEPENDS:=@IPV6 +kmod-nf-conntrack
   FILES:=$(PKG_BUILD_DIR)/qca-nss-sfe.ko
   KCONFIG:= \
 	   CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y \
