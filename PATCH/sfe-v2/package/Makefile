@@ -30,7 +30,6 @@ define KernelPackage/shortcut-fe
 	   CONFIG_SHORTCUT_FE=y \
 	   CONFIG_XFRM=y
   PROVIDES:=kmod-shortcut-fe
-  AUTOLOAD:=$(call AutoLoad,50,qca-nss-sfe)
 endef
 
 define KernelPackage/shortcut-fe/description
@@ -43,6 +42,8 @@ define KernelPackage/shortcut-fe/install
 	$(INSTALL_BIN) ./files/etc/init.d/shortcut-fe $(1)/etc/init.d/shortcut-fe
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./files/usr/bin/sfe_dump $(1)/usr/bin/sfe_dump
+	$(INSTALL_DIR) $(1)/usr/share/ucitrack
+	$(INSTALL_DATA) ./files/usr/share/ucitrack/shortcut-fe.json $(1)/usr/share/ucitrack/shortcut-fe.json
 endef
 
 define KernelPackage/shortcut-fe-cm
@@ -57,7 +58,6 @@ define KernelPackage/shortcut-fe-cm
 	   CONFIG_NF_CONNTRACK_EVENTS=y \
 	   CONFIG_XFRM=y
   PROVIDES:=kmod-shortcut-fe-cm
-  AUTOLOAD:=$(call AutoLoad,51,shortcut-fe-cm)
 endef
 
 define KernelPackage/shortcut-fe-cm/description
