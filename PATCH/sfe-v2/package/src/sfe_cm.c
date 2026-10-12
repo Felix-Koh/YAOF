@@ -469,6 +469,16 @@ static void sfe_cm_sync_rule(struct sfe_connection_sync *sis)
 
 	ct = nf_ct_tuplehash_to_ctrack(h);
 
+	if (!test_bit(IPS_FIXED_TIMEOUT_BIT, &ct->status)) {
+		spin_lock_bh(&ct->lock);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0))
+		ct->timeout.expires += sis->delta_jiffies;
+#else
+		ct->timeout += sis->delta_jiffies;
+#endif
+		spin_unlock_bh(&ct->lock);
+	}
+
 	sfe_cm_add_acct(ct, IP_CT_DIR_ORIGINAL, sis->src_new_packet_count, sis->src_new_byte_count);
 	sfe_cm_add_acct(ct, IP_CT_DIR_REPLY, sis->dest_new_packet_count, sis->dest_new_byte_count);
 
@@ -500,6 +510,7 @@ static void sfe_cm_v2_ipv4_sync_many_callback(void *app_data, struct sfe_ipv4_ms
 		sis.dest_new_packet_count = s->return_rx_packet_count;
 		sis.dest_new_byte_count = s->return_rx_byte_count;
 		sis.reason = s->reason;
+		sis.delta_jiffies = s->inc_ticks;
 
 		sfe_cm_sync_rule(&sis);
 	}
@@ -531,6 +542,7 @@ static void sfe_cm_v2_ipv6_sync_many_callback(void *app_data, struct sfe_ipv6_ms
 		sis.dest_new_packet_count = s->return_rx_packet_count;
 		sis.dest_new_byte_count = s->return_rx_byte_count;
 		sis.reason = s->reason;
+		sis.delta_jiffies = s->inc_ticks;
 
 		sfe_cm_sync_rule(&sis);
 	}
