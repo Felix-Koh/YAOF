@@ -48,7 +48,7 @@ define KernelPackage/shortcut-fe-cm
   CATEGORY:=Kernel modules
   SUBMENU:=Network Support
   TITLE:=Qualcomm Shortcut-FE v2 Connection Manager
-  DEPENDS:=+kmod-shortcut-fe +kmod-ipt-conntrack
+  DEPENDS:=+kmod-shortcut-fe
   FILES:=$(PKG_BUILD_DIR)/shortcut-fe-cm.ko
   KCONFIG:= \
 	   CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y \

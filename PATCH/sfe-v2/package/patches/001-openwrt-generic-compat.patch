@@ -25,18 +25,20 @@ index 03fb87c..5463759 100644
  endif
  
 -ccflags-y += -Werror -Wall -Iexports/
-+ccflags-y += -Wall -I$(src)/exports/ -I$(src) -include $(src)/sfe_compat.h
++ccflags-y += -Wall -Wno-missing-prototypes -Wno-error -I$(src)/exports/ -I$(src) -include $(src)/sfe_compat.h
 +
 diff --git a/sfe.c b/sfe.c
 index 66c6187..5d428cf 100644
 --- a/sfe.c
 +++ b/sfe.c
-@@ -39,7 +39,7 @@
+@@ -39,7 +39,9 @@
  
  extern int max_ipv4_conn;
  extern int max_ipv6_conn;
 -extern bool fast_tc_filter;
 +bool fast_tc_filter = false;
++int (*athrs_fast_nat_recv)(struct sk_buff *skb) = NULL;
++EXPORT_SYMBOL_GPL(athrs_fast_nat_recv);
  uint8_t sfe_fls_flush_on_hwm_enable;
  
  #define SFE_MESSAGE_VERSION 0x1
