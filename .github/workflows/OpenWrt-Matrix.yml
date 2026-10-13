@@ -1,6 +1,10 @@
 # Reusable workflow for building OpenWrt firmware
 name: OpenWrt-Matrix
 
+permissions:
+  contents: write
+  actions: read
+
 on:
   workflow_call:
     inputs:
@@ -179,7 +183,7 @@ jobs:
 
       - name: Prepare Mixedwrt
         run: |
-          sudo chown -R runner:runner /home/runner/work/YAOF
+          sudo chown -R runner:runner "$GITHUB_WORKSPACE"
           cp -r ./SCRIPTS/${{ matrix.script_dir }}/. ./SCRIPTS/
           cp -r ./SCRIPTS/. ./
           /bin/bash 01_get_ready.sh
@@ -191,6 +195,9 @@ jobs:
           /bin/bash 02_prepare_package.sh
           /bin/bash 02_target_only.sh
           /bin/bash 04_remove_upx.sh
+          if [ "${{ matrix.name }}" = "X86" ]; then
+            /bin/bash ../CUSTOM/apply.sh
+          fi
 
       - name: QTMDFW4
         working-directory: ${{ github.workspace }}/openwrt
@@ -215,6 +222,9 @@ jobs:
         working-directory: ${{ github.workspace }}/openwrt
         run: |
           make defconfig
+          if [ "${{ matrix.name }}" = "X86" ]; then
+            python3 ../CUSTOM/verify.py config
+          fi
 
       - name: Get Architecture
         id: getarch
@@ -225,7 +235,7 @@ jobs:
             TARGET_DEVICE_ARCH="$TARGET_DEVICE_ARCH-${{ matrix.arch_suffix }}"
           fi
           echo "TARGET_DEVICE_ARCH=$TARGET_DEVICE_ARCH" >> $GITHUB_ENV
-          latest_release="$(curl -s https://github.com/openwrt/openwrt/tags | grep -Eo "v[0-9\.]+\-*r*c*[0-9]*.tar.gz" | sed -n '/[2-9][5-9]/p' | sed -n 1p | sed 's/.tar.gz//g' | sed 's/v//g')"
+          latest_release="25.12.5"
           echo "latest_release=${latest_release}" >> $GITHUB_ENV
 
           echo "Package folder ${{ env.openwrt_source_name }}"
@@ -270,8 +280,7 @@ jobs:
         id: compileopenwrt
         continue-on-error: true
         run: |
-          IGNORE_ERRORS=1 make -j$(($(nproc) + 1))
-          echo $?
+          make -j$(($(nproc) + 1))
       - name: If Error
         if: steps.compileopenwrt.outcome == 'failure'
         working-directory: ${{ github.workspace }}/openwrt
@@ -280,47 +289,67 @@ jobs:
           echo '================================================================'
           make -j1 V=s
 
+      - name: Verify N150 firmware
+        if: inputs.build_firmware && matrix.name == 'X86'
+        working-directory: ${{ github.workspace }}/openwrt
+        run: python3 ../CUSTOM/verify.py firmware
+
       - name: Organize files
         if: inputs.build_firmware
         id: organize
-        env:
-          LATEST_RELEASE: ${{ env.latest_release }}
         run: |
-          rm -rf ./artifact/
-          mkdir -p ./artifact/
-          mv openwrt/bin/targets/${{ matrix.arch }}/${{ env.sysupgrade_glob }} ./artifact/ || true
-          cd ./artifact/
-          ls -Ahl
-          gzip -d *.gz || true
-          gzip --best *.img
-          ls -Ahl
-          sha256sum openwrt*${{ env.sha_match }}* | tee ${{ env.artifact_prefix }}-$(date +%Y-%m-%d)-${{ env.latest_release }}.sha256sum
-          zip ${{ env.artifact_prefix }}-$(date +%Y-%m-%d)-${{ env.latest_release }}-ext4.zip ${{ env.ext4_zip }}
-          zip ${{ env.artifact_prefix }}-$(date +%Y-%m-%d)-${{ env.latest_release }}-sfs.zip ${{ env.sfs_zip }}
-          ls -Ahl
+          mkdir -p artifact
+          cp openwrt/bin/targets/${{ matrix.arch }}/*combined*.img* artifact/
+          cp openwrt/bin/targets/${{ matrix.arch }}/*.manifest artifact/
+          cp openwrt/bin/targets/${{ matrix.arch }}/N150-validation.json artifact/
+          cp openwrt/.config artifact/build.config
+          cp CUSTOM/package-sources.json artifact/
+          cp CUSTOM/N150使用说明.md artifact/
+          cd artifact
+          for image in *.img; do
+            if [ -f "$image" ]; then gzip --best "$image"; fi
+          done
+          gzip -t *.img.gz
+          sha256sum *.img.gz > SHA256SUMS
+          release_tag="n150-25.12.5-${{ github.run_id }}"
+          echo "release_tag=$release_tag" >> "$GITHUB_ENV"
+
+      - name: Upload firmware and evidence
+        if: inputs.build_firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: YAOF-N150-custom-${{ github.run_id }}
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Create release
         if: inputs.build_firmware
         id: create_release
         uses: ncipollo/release-action@main
         with:
-          name: OpenWRT-${{ env.latest_release }}
-          allowUpdates: true
-          prerelease: false
-          tag: ${{ env.latest_release }}
-          commit: "25.12"
-          replacesArtifacts: true
+          name: YAOF N150 私人定制 25.12.5
+          prerelease: true
+          tag: ${{ env.release_tag }}
+          commit: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: ./artifact/*.zip
+          artifacts: artifact/*
+          body: |
+            N150 / 4GB / 四网口私人定制固件。内置 DAED、网络唤醒、DDNS-Go、UPnP、FullCone、IRQ 优化、KMS、HomeProxy。
+            软件清单和安装后的根目录已通过自动检查；尚未在实体设备刷机验证。
+            首次刷机优先选 generic-squashfs-combined-efi.img.gz。具体见 N150使用说明.md。
+            包含 UEFI / Legacy 与 squashfs / ext4 镜像、SHA256SUMS、编译配置和验证报告。
+
+      - name: Upload configuration on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: N150-build-diagnostics-${{ github.run_id }}
+          path: |
+            openwrt/.config
+            openwrt/logs/
+            openwrt/bin/targets/x86/64/*.manifest
+          retention-days: 7
 
       - name: Print Disk Space After
         run: df -h
-
-      - name: Trigger badge sync for current platform
-        if: github.workflow == 'OpenWrt-Matrix' && inputs.build_firmware && steps.create_release.outcome != 'skipped' && always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Triggering badge sync for ${{ matrix.name }} with status: ${{ steps.create_release.outcome }}"
-          gh workflow run "${{ matrix.name }}-OpenWrt.yml" \
-            --field badge_status="${{ steps.create_release.outcome }}" || echo "Failed to trigger ${{ matrix.name }} workflow"

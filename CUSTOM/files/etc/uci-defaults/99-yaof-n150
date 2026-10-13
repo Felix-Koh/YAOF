@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# The x86 ethernet number refers to the Linux name, not the chassis label.
+# Only apply the four-port layout when all four physical interfaces exist.
+if [ -e /sys/class/net/eth0/device ] && [ -e /sys/class/net/eth1/device ] &&
+   [ -e /sys/class/net/eth2/device ] && [ -e /sys/class/net/eth3/device ]; then
+    bridge="$(uci -q show network | sed -n "s/^\(network\.[^.]*\)\.name='br-lan'$/\1/p" | head -n 1)"
+    if [ -z "$bridge" ]; then
+        bridge="network.$(uci add network device)"
+        uci set "$bridge.name=br-lan"
+        uci set "$bridge.type=bridge"
+    fi
+    uci -q delete "$bridge.ports"
+    for port in eth1 eth2 eth3; do
+        uci add_list "$bridge.ports=$port"
+    done
+    uci -q delete network.lan.ifname
+    uci set network.lan.device='br-lan'
+    uci -q delete network.wan.ifname
+    uci set network.wan.device='eth0'
+    uci -q delete network.wan6.ifname
+    uci set network.wan6.device='eth0'
+    uci commit network
+fi
+
+uci -q set irqbalance.@irqbalance[0].enabled='1'
+uci -q commit irqbalance
+/etc/init.d/irqbalance enable
+
+# Keep unconfigured proxy and DDNS services inactive.
+uci -q set daed.config.enabled='0'
+uci -q commit daed
+uci -q set ddns-go.config.enabled='0'
+uci -q commit ddns-go
+exit 0

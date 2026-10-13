@@ -1,0 +1,24 @@
+{
+  "ddns-go": {
+    "repository": "immortalwrt/packages",
+    "commit": "25ad600a90980bed1ee76a212f9a5e42b499bb62",
+    "files": [
+      "net/ddns-go/Makefile",
+      "net/ddns-go/files/ddns-go.conf",
+      "net/ddns-go/files/ddns-go.init"
+    ]
+  },
+  "luci-app-ddns-go": {
+    "repository": "immortalwrt/luci",
+    "commit": "5fc1fac5684cac6eee2c7fbff78c65b867980dd8",
+    "files": [
+      "applications/luci-app-ddns-go/Makefile",
+      "applications/luci-app-ddns-go/htdocs/luci-static/resources/view/ddns-go.js",
+      "applications/luci-app-ddns-go/po/templates/ddns-go.pot",
+      "applications/luci-app-ddns-go/po/zh_Hans/ddns-go.po",
+      "applications/luci-app-ddns-go/po/zh_Hant/ddns-go.po",
+      "applications/luci-app-ddns-go/root/usr/share/luci/menu.d/luci-app-ddns-go.json",
+      "applications/luci-app-ddns-go/root/usr/share/rpcd/acl.d/luci-app-ddns-go.json"
+    ]
+  }
+}
