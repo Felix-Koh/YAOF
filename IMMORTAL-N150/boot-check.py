@@ -43,7 +43,7 @@ for mode, suffix in [('bios', '*squashfs-combined.img.gz'), ('uefi', '*squashfs-
                     "uci get network.lan.ipaddr",
                     "uci get system.@system[0].hostname",
                     "/etc/init.d/uhttpd running && echo WEB_OK",
-                    "printf 'GET /cgi-bin/luci/ HTTP/1.0\\r\\nHost: 192.168.1.1\\r\\n\\r\\n' | nc 192.168.1.1 80 > /tmp/test-page",
+                    "{ printf 'GET /cgi-bin/luci/admin/status/overview HTTP/1.0\\r\\nHost: 192.168.1.1\\r\\n\\r\\n'; sleep 10; } | nc 192.168.1.1 80 > /tmp/test-page",
                     "grep -qi 'X-LuCI-Login-Required: yes' /tmp/test-page && grep -q luci_username /tmp/test-page && grep -q luci_password /tmp/test-page && echo HTTP_OK",
                     "head -c 200 /tmp/test-page; echo",
                     "logread | tail -15",
@@ -75,5 +75,8 @@ for mode, suffix in [('bios', '*squashfs-combined.img.gz'), ('uefi', '*squashfs-
     checks['hostname'] = bool(re.search(r'\nImmortalWrt-N150\r?\n', text))
     reports.append({'mode': mode, 'checks': checks, 'passed': all(checks.values())})
 (output / 'boot-validation.json').write_text(json.dumps({'method': 'QEMU BIOS and UEFI disk boot; isolated LAN hub without DHCP, restricted WAN user networking; verifies LuCI login form and expected HTTP 403 login-required header', 'boots': reports, 'physical_n150_tested': False}, indent=2) + '\n')
+if not all(r['passed'] for r in reports):
+    for log in output.glob('boot-*-serial.log'):
+        print(log.name, log.read_text(errors='replace')[-10000:])
 assert all(r['passed'] for r in reports), f'Runtime checks failed: {reports}; inspect serial logs'
 print(reports)
