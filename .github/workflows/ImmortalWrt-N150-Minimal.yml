@@ -2,9 +2,16 @@ name: ImmortalWrt-N150-Minimal
 
 on:
   workflow_dispatch:
+    inputs:
+      image_run_id:
+        description: 'Optional previous diagnostic artifact to retest unchanged images'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   image:
@@ -17,7 +24,33 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends build-essential gawk gettext git libncurses-dev libssl-dev python3 rsync unzip zlib1g-dev zstd qemu-system-x86 ovmf
       - name: Build official ImmortalWrt minimal images and verify
+        if: inputs.image_run_id == ''
         run: bash IMMORTAL-N150/build.sh "$RUNNER_TEMP/n150-build"
+      - name: Download images for runtime retest
+        if: inputs.image_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ImmortalWrt-N150-diagnostics-${{ inputs.image_run_id }}
+          run-id: ${{ inputs.image_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/retest
+      - name: Retest the exact previously built images
+        if: inputs.image_run_id != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/n150-build/output"
+          cp "$RUNNER_TEMP/retest/output/"* "$RUNNER_TEMP/n150-build/output/"
+          python3 - "$RUNNER_TEMP/n150-build/output" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          output = Path(sys.argv[1])
+          report = json.loads((output / 'validation.json').read_text())
+          assert report['status'] == 'passed'
+          for image in report['images']:
+              assert hashlib.sha256((output / image['name']).read_bytes()).hexdigest() == image['sha256']
+          PY
+          python3 IMMORTAL-N150/boot-check.py "$RUNNER_TEMP/n150-build/output"
+          cd "$RUNNER_TEMP/n150-build/output"
+          sha256sum *.img.gz > SHA256SUMS
       - name: Upload firmware and validation evidence
         if: success()
         uses: actions/upload-artifact@v4
