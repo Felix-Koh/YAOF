@@ -1,0 +1,37 @@
+name: ImmortalWrt-N150-Minimal
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install image builder and boot test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential gawk gettext git libncurses-dev libssl-dev python3 rsync unzip zlib1g-dev zstd qemu-system-x86
+      - name: Build official ImmortalWrt minimal images and verify
+        run: bash IMMORTAL-N150/build.sh "$RUNNER_TEMP/n150-build"
+      - name: Upload firmware and validation evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImmortalWrt-N150-Minimal-25.12.2-${{ github.run_id }}
+          path: ${{ runner.temp }}/n150-build/output/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImmortalWrt-N150-diagnostics-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/n150-build/output/
+            ${{ runner.temp }}/n150-build/*/.config
+          retention-days: 7
