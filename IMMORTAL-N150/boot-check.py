@@ -17,7 +17,7 @@ for mode, suffix in [('bios', '*squashfs-combined.img.gz'), ('uefi', '*squashfs-
     with gzip.open(image, 'rb') as src, disk.open('wb') as dst:
         while block := src.read(1024 * 1024):
             dst.write(block)
-    command = ['qemu-system-x86_64', '-machine', 'pc,accel=tcg', '-m', '512', '-smp', '2', '-cpu', 'max', '-nographic', '-monitor', 'none', '-no-reboot', '-snapshot', '-drive', f'file={disk},format=raw,if=virtio', '-netdev', 'user,id=net0,restrict=on', '-device', 'e1000e,netdev=net0', '-netdev', 'user,id=net1,restrict=on', '-device', 'e1000e,netdev=net1']
+    command = ['qemu-system-x86_64', '-machine', 'pc,accel=tcg', '-m', '512', '-smp', '2', '-cpu', 'max', '-nographic', '-monitor', 'none', '-no-reboot', '-snapshot', '-drive', f'file={disk},format=raw,if=virtio', '-netdev', 'hubport,id=net0,hubid=0', '-device', 'e1000e,netdev=net0', '-netdev', 'user,id=net1,restrict=on', '-device', 'e1000e,netdev=net1']
     if mode == 'uefi':
         firmware = Path('/usr/share/OVMF/OVMF_CODE_4M.fd')
         assert firmware.exists(), 'OVMF UEFI firmware missing'
@@ -43,8 +43,9 @@ for mode, suffix in [('bios', '*squashfs-combined.img.gz'), ('uefi', '*squashfs-
                     "uci get network.lan.ipaddr",
                     "uci get system.@system[0].hostname",
                     "/etc/init.d/uhttpd running && echo WEB_OK",
-                    "for n in 1 2 3; do uclient-fetch -T 30 -O /tmp/test-page http://127.0.0.1/cgi-bin/luci/ && test -s /tmp/test-page && grep -qi html /tmp/test-page && { echo HTTP_OK; break; }; sleep 2; done",
-                    "test -s /tmp/test-page && head -c 200 /tmp/test-page; echo",
+                    "printf 'GET /cgi-bin/luci/ HTTP/1.0\\r\\nHost: 192.168.1.1\\r\\n\\r\\n' | nc 192.168.1.1 80 > /tmp/test-page",
+                    "grep -qi 'X-LuCI-Login-Required: yes' /tmp/test-page && grep -q luci_username /tmp/test-page && grep -q luci_password /tmp/test-page && echo HTTP_OK",
+                    "head -c 200 /tmp/test-page; echo",
                     "logread | tail -15",
                     "/etc/init.d/dnsmasq running && echo DNS_OK",
                     "nslookup localhost 127.0.0.1 >/dev/null 2>&1 && echo DNS_QUERY_OK",
@@ -73,6 +74,6 @@ for mode, suffix in [('bios', '*squashfs-combined.img.gz'), ('uefi', '*squashfs-
     checks['address'] = bool(re.search(r'\n192\.168\.1\.1\r?\n', text))
     checks['hostname'] = bool(re.search(r'\nImmortalWrt-N150\r?\n', text))
     reports.append({'mode': mode, 'checks': checks, 'passed': all(checks.values())})
-(output / 'boot-validation.json').write_text(json.dumps({'method': 'QEMU disk boot with two emulated e1000e NICs and isolated user networking', 'boots': reports, 'physical_n150_tested': False}, indent=2) + '\n')
+(output / 'boot-validation.json').write_text(json.dumps({'method': 'QEMU BIOS and UEFI disk boot; isolated LAN hub without DHCP, restricted WAN user networking; verifies LuCI login form and expected HTTP 403 login-required header', 'boots': reports, 'physical_n150_tested': False}, indent=2) + '\n')
 assert all(r['passed'] for r in reports), f'Runtime checks failed: {reports}; inspect serial logs'
 print(reports)
