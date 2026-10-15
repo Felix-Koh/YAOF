@@ -15,7 +15,7 @@ jobs:
       - name: Install image builder and boot test dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends build-essential gawk gettext git libncurses-dev libssl-dev python3 rsync unzip zlib1g-dev zstd qemu-system-x86
+          sudo apt-get install -y --no-install-recommends build-essential gawk gettext git libncurses-dev libssl-dev python3 rsync unzip zlib1g-dev zstd qemu-system-x86 ovmf
       - name: Build official ImmortalWrt minimal images and verify
         run: bash IMMORTAL-N150/build.sh "$RUNNER_TEMP/n150-build"
       - name: Upload firmware and validation evidence

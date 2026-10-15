@@ -4,6 +4,8 @@ uci set system.@system[0].timezone='CST-8'
 uci set system.@system[0].zonename='Asia/Shanghai'
 uci set luci.main.lang='zh_cn'
 uci set network.lan.ipaddr='192.168.1.1'
+uci set system.@imm_init[0].apk_mirror='https://downloads.immortalwrt.org'
+sed -i 's,https://mirrors.vsean.net/openwrt,https://downloads.immortalwrt.org,g' /etc/apk/repositories.d/distfeeds.list
 uci commit system
 uci commit luci
 uci commit network
