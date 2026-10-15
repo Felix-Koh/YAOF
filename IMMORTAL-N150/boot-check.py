@@ -17,11 +17,13 @@ for mode, suffix in [('bios', '*squashfs-combined.img.gz'), ('uefi', '*squashfs-
     with gzip.open(image, 'rb') as src, disk.open('wb') as dst:
         while block := src.read(1024 * 1024):
             dst.write(block)
-    command = ['qemu-system-x86_64', '-machine', 'pc,accel=tcg', '-m', '512', '-smp', '2', '-nographic', '-monitor', 'none', '-no-reboot', '-snapshot', '-drive', f'file={disk},format=raw,if=virtio', '-netdev', 'user,id=net0,restrict=on', '-device', 'e1000e,netdev=net0', '-netdev', 'user,id=net1,restrict=on', '-device', 'e1000e,netdev=net1']
+    command = ['qemu-system-x86_64', '-machine', 'pc,accel=tcg', '-m', '512', '-smp', '2', '-cpu', 'max', '-nographic', '-monitor', 'none', '-no-reboot', '-snapshot', '-drive', f'file={disk},format=raw,if=virtio', '-netdev', 'user,id=net0,restrict=on', '-device', 'e1000e,netdev=net0', '-netdev', 'user,id=net1,restrict=on', '-device', 'e1000e,netdev=net1']
     if mode == 'uefi':
         firmware = Path('/usr/share/OVMF/OVMF_CODE_4M.fd')
         assert firmware.exists(), 'OVMF UEFI firmware missing'
-        command += ['-drive', f'if=pflash,format=raw,readonly=on,file={firmware}']
+        vars_disk = output.parent / 'OVMF_VARS_4M.fd'
+        vars_disk.write_bytes(Path('/usr/share/OVMF/OVMF_VARS_4M.fd').read_bytes())
+        command += ['-drive', f'if=pflash,format=raw,readonly=on,file={firmware}', '-drive', f'if=pflash,format=raw,file={vars_disk}']
     proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     data = bytearray()
     sent = False
@@ -34,7 +36,22 @@ for mode, suffix in [('bios', '*squashfs-combined.img.gz'), ('uefi', '*squashfs-
                 proc.stdin.write(b'\nroot\n')
                 proc.stdin.flush()
                 time.sleep(15)
-                proc.stdin.write(b"echo CHECK_START; cat /etc/openwrt_release; uci get network.lan.ipaddr; uci get system.@system[0].hostname; /etc/init.d/uhttpd running && echo WEB_OK; uclient-fetch -q -O /tmp/test-page http://127.0.0.1/cgi-bin/luci/ && test -s /tmp/test-page && echo HTTP_OK; /etc/init.d/dnsmasq running && echo DNS_OK; nslookup localhost 127.0.0.1 >/dev/null 2>&1 && echo DNS_QUERY_OK; fw4 check >/dev/null 2>&1 && nft list table inet fw4 >/dev/null 2>&1 && echo FIREWALL_OK; grep -q https://downloads.immortalwrt.org /etc/apk/repositories.d/distfeeds.list && ! grep -q mirrors.vsean.net /etc/apk/repositories.d/distfeeds.list && echo FEED_OK; echo CHECK_DONE\n")
+                commands = [
+                    "for n in $(seq 1 60); do /etc/init.d/uhttpd running && /etc/init.d/dnsmasq running && break; sleep 1; done",
+                    "echo CHECK_START",
+                    "cat /etc/openwrt_release",
+                    "uci get network.lan.ipaddr",
+                    "uci get system.@system[0].hostname",
+                    "/etc/init.d/uhttpd running && echo WEB_OK",
+                    "uclient-fetch -T 5 -q -O /tmp/test-page http://127.0.0.1/cgi-bin/luci/ && test -s /tmp/test-page && echo HTTP_OK",
+                    "/etc/init.d/dnsmasq running && echo DNS_OK",
+                    "nslookup localhost 127.0.0.1 >/dev/null 2>&1 && echo DNS_QUERY_OK",
+                    "fw4 check >/dev/null 2>&1 && nft list table inet fw4 >/dev/null 2>&1 && echo FIREWALL_OK",
+                    "grep -q https://downloads.immortalwrt.org /etc/apk/repositories.d/distfeeds.list && ! grep -q mirrors.vsean.net /etc/apk/repositories.d/distfeeds.list && echo FEED_OK",
+                    "echo CHECK_DONE",
+                ]
+                assert all(len(line) < 400 for line in commands)
+                proc.stdin.write(('\n'.join(commands) + '\n').encode())
                 proc.stdin.flush()
                 sent = True
             if b'\r\nCHECK_DONE\r\n' in data or b'\nCHECK_DONE\n' in data:
